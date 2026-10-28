@@ -34,34 +34,39 @@
             display: flex; align-items: center; justify-content: center; font-size: 24px;
         }
         h1 { margin: 0 0 18px; font-size: 26px; font-weight: normal; letter-spacing: -.01em; }
-        form { display: flex; gap: 8px; max-width: 620px; margin: 0 auto; }
+        form { position: relative; max-width: 620px; margin: 0 auto; }
         input {
-            flex: 1; min-width: 0; padding: 12px 14px; font: inherit; font-size: 15px;
+            width: 100%; padding: 12px 52px 12px 14px; font: inherit; font-size: 15px;
             background: #fff; border: 2px solid var(--ink); border-radius: 4px; outline: none;
         }
-        input:focus { box-shadow: 4px 4px 0 var(--butter-deep); }
+        #go {
+            position: absolute; right: 4px; top: 4px; bottom: 4px; width: 42px; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+            background: transparent; border: 0; border-radius: 4px;
+        }
+        #go:hover { background: var(--butter); }
         button {
             font: inherit; padding: 0 18px; cursor: pointer;
             background: var(--butter); color: var(--ink); border: 2px solid var(--ink); border-radius: 4px;
         }
         button:hover { background: var(--butter-deep); }
         .chips { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
-        .chips button { padding: 5px 14px; font-size: 13px; background: transparent; border-radius: 999px; }
-        .chips button:hover { background: var(--ink); color: #fff; }
+        .chips button { padding: 6px 16px; font-size: 13px; background: #fcfdff; border: 0; border-radius: 999px; }
+        .chips button:hover { background: var(--butter); }
 
         /* 본문: 왼쪽 결과 + 오른쪽 지도(작게, 가운데) */
         .stage { display: grid; grid-template-columns: 340px 1fr; gap: 20px; margin-top: 28px; align-items: start; }
         #side { display: flex; flex-direction: column; gap: 12px; max-height: 520px; overflow-y: auto; padding: 2px; }
-        #map { height: 520px; border: 2px solid var(--ink); border-radius: 4px; }
+        #map { height: 520px; border-radius: 4px; }
         .empty { font-size: 14px; color: #555; padding: 14px 4px; }
 
-        .card { background: var(--butter); border: 2px solid var(--ink); border-radius: 4px; padding: 14px 16px; font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
+        .card { background: #fff; border-radius: 4px; padding: 14px 16px; font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
         .card[hidden] { display: none; }
-        #weather { background: #fff; }
-        #steps { background: transparent; border: 1px dashed var(--ink); font-size: 12px; color: #444; font-family: ui-monospace, monospace; }
+                #steps { background: #e6ebfb; font-size: 12px; color: #444; font-family: ui-monospace, monospace; }
         #spots { display: flex; flex-direction: column; gap: 8px; }
-        .spot { text-align: left; padding: 10px 14px; background: #fff; display: flex; justify-content: space-between; gap: 8px; }
-        .spot small { color: #555; }
+        .spot { text-align: left; padding: 10px 14px; background: var(--butter); border: 0; display: flex; justify-content: space-between; gap: 8px; }
+        .spot small { color: #444; }
+        .spot:hover { background: var(--butter-deep); }
         .tag { font-size: 12px; white-space: nowrap; }
 
         .pin {
@@ -86,7 +91,9 @@
             <h1>날씨 따라 고르는 여행지</h1>
             <form id="form">
                 <input id="q" placeholder="예) 동쪽에서 오늘 갈 만한 곳 추천해줘" autofocus>
-                <button>추천</button>
+                <button id="go" aria-label="검색">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg>
+                </button>
             </form>
             <div class="chips">
                 <button type="button" data-q="동쪽 관광지">동쪽</button>
