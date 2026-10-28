@@ -82,11 +82,30 @@ async function chat(message) {
   return done("도구 호출이 너무 많아 중단했어요.");
 }
 
+// Gemini 가 과부하일 때: 문장에서 지역을 찾아 도구를 직접 호출하고 날씨 기준으로 골라 답한다
+async function fallbackChat(message, reason) {
+  const area = ["동쪽", "서쪽", "서귀포", "제주시"].find((a) => message.includes(a));
+  if (!area) throw new Error(reason);
+  const [w, list] = await Promise.all([toolHandlers.get_weather({ area }), toolHandlers.find_spots({ area })]);
+  const rainy = !w.error && (w.rain_probability_percent >= 50 || w.precipitation_mm > 0);
+  const picked = (list.filter((s) => s.indoor === rainy).length ? list.filter((s) => s.indoor === rainy) : list).slice(0, 4);
+  const head = w.error
+    ? `날씨를 확인하지 못해 ${area} 관광지를 보여드려요.`
+    : `${area}은 ${w.weather}, ${w.temperature_c}°C, 강수확률 ${w.rain_probability_percent}%라서 ${rainy ? "실내" : "야외"} 위주로 골랐어요.`;
+  return {
+    reply: `${head}\n\n` + picked.map((s) => `• ${s.name} — ${s.desc}`).join("\n") + "\n\n(AI 모델이 혼잡해 규칙 기반으로 추천했어요.)",
+    spots: picked.map((s) => ({ ...s, ...coords[s.name] })),
+    weather: w.error ? [] : [w],
+    steps: [`⚠️ Gemini 사용 불가 → 직접 도구 호출: get_weather("${area}"), find_spots("${area}")`],
+  };
+}
+
 // Vercel 서버리스 함수: POST /api/chat { message }
 module.exports = async (req, res) => {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
   try {
-    res.status(200).json(await chat(req.body.message));
+    const message = req.body.message;
+    res.status(200).json(await chat(message).catch((e) => fallbackChat(message, e.message)));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
