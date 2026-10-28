@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { toolDefinitions, toolHandlers } = require("./tools");
 
-const MODEL = "gemini-2.5-flash";
+const MODEL = "gemini-3.8-flash";
 const SYSTEM =
   "제주 여행 추천 에이전트. 사용자의 요청에서 지역을 파악해 get_weather 로 날씨를 먼저 확인하고, 비·강수확률이 높으면 실내, 맑으면 야외 위주로 find_spots 를 호출해 장소를 고른다. 장소는 반드시 find_spots 결과에서만 추천하고, 날씨를 근거로 이유를 짧게 설명한다. 지역이 불분명하면 되묻는다.";
 
