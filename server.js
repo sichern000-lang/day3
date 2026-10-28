@@ -1,4 +1,4 @@
-// 로컬 실행: ANTHROPIC_API_KEY=... OPENWEATHER_API_KEY=... node server.js  →  http://localhost:3000
+// 로컬 실행: GEMINI_API_KEY=... OPENWEATHER_API_KEY=... node server.js  →  http://localhost:3000
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
