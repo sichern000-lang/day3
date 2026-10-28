@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>json test ver.4
+    </title>
+</head>
+<body>
+    <script>
+        // a1 ~ a100 키, 각 키마다 배열 길이는 100~199개로 서로 다름
+        let data = {};
+        for (let k = 1; k <= 100; k++){
+            data["a"+k] = Array.from({length: 100 + Math.floor(Math.random()*100)}, ()=> Math.floor(Math.random()*1000));
+        }
+        let v = Array.from({length: 100}, (_, i)=> i+1); // [1,2,3,...,100]
+        const show = (id)=> console.log("show "+id);
+        for (const i of v){
+            for (const element of data["a"+i]){
+                console.log(element+"\n"); //\n은 줄바꿈을 의미
+                show(element);
+            }
+        }
+    </script>
+</body>
+</html>

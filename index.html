@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>제주 관광지 지도</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <style>
+        body { margin: 0; font-family: sans-serif; }
+        form { display: flex; gap: 8px; padding: 12px; }
+        input { flex: 1; padding: 8px; }
+        #reply { padding: 0 12px 12px; white-space: pre-wrap; }
+        #map { height: 70vh; }
+    </style>
+</head>
+<body>
+    <form id="form">
+        <input id="q" placeholder="예) 동쪽에서 비 올 때 갈 실내 관광지 알려줘" autofocus>
+        <button>검색</button>
+    </form>
+    <div id="reply"></div>
+    <div id="map"></div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const map = L.map("map").setView([33.38, 126.55], 10);
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "&copy; OpenStreetMap contributors"
+        }).addTo(map);
+        const layer = L.layerGroup().addTo(map);
+
+        document.getElementById("form").onsubmit = async (e) => {
+            e.preventDefault();
+            const reply = document.getElementById("reply");
+            reply.textContent = "찾는 중...";
+            layer.clearLayers(); // 이전 검색 마커는 새 검색을 시작하는 즉시 지운다
+            const res = await fetch("/api/chat", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ message: document.getElementById("q").value })
+            });
+            const data = await res.json();
+            if (data.error) { reply.textContent = data.error; return; }
+            reply.textContent = data.reply;
+
+            for (const s of data.spots) {
+                L.marker([s.lat, s.lon]).addTo(layer)
+                    .bindPopup(`<b>${s.name}</b><br>${s.areas.join(", ")} · ${s.indoor ? "실내" : "야외"}<br>${s.desc}`);
+            }
+            if (data.spots.length) map.fitBounds(data.spots.map((s) => [s.lat, s.lon]), { padding: [40, 40] });
+        };
+    </script>
+</body>
+</html>
