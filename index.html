@@ -3,116 +3,65 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISS 실시간 추적</title>
+    <title>제주 여행 추천 에이전트</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <style>
-        html, body { margin: 0; height: 100%; background: #070b16; color: #e8eefc; font-family: sans-serif; }
-        #map { position: absolute; inset: 0; background: #070b16; }
-        .dark-tiles { filter: invert(1) hue-rotate(200deg) brightness(.8) contrast(.9) saturate(.6); }
-        #panel {
-            position: absolute; z-index: 1000; top: 16px; left: 16px; width: 240px; padding: 16px;
-            background: rgba(10, 16, 36, .82); backdrop-filter: blur(8px);
-            border: 1px solid rgba(120, 160, 255, .35); border-radius: 14px;
-            box-shadow: 0 0 30px rgba(80, 130, 255, .25);
-        }
-        h1 { margin: 0 0 12px; font-size: 18px; }
-        .row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; }
-        .row b { color: #7fd1ff; font-variant-numeric: tabular-nums; }
-        #status { margin-top: 10px; font-size: 12px; opacity: .7; }
-        .iss {
-            width: 18px; height: 18px; border-radius: 50%; background: #ffd34d;
-            box-shadow: 0 0 0 4px rgba(255, 211, 77, .35), 0 0 24px 8px rgba(255, 211, 77, .7);
-            animation: pulse 1.6s ease-out infinite;
-        }
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(255, 211, 77, .7), 0 0 24px 8px rgba(255, 211, 77, .7); }
-            100% { box-shadow: 0 0 0 26px rgba(255, 211, 77, 0), 0 0 24px 8px rgba(255, 211, 77, .7); }
-        }
+        body { margin: 0; font-family: sans-serif; display: flex; height: 100vh; }
+        #side { width: 360px; padding: 16px; overflow-y: auto; box-sizing: border-box; border-right: 1px solid #ddd; }
+        #map { flex: 1; }
+        h1 { font-size: 18px; margin: 0 0 12px; }
+        form { display: flex; gap: 8px; }
+        input { flex: 1; padding: 8px; }
+        .box { margin-top: 12px; padding: 10px; border-radius: 8px; background: #f3f6fb; font-size: 14px; white-space: pre-wrap; }
+        .steps { font-size: 12px; color: #555; font-family: monospace; }
+        @media (max-width: 700px) { body { flex-direction: column-reverse; } #side { width: auto; height: 45vh; } }
     </style>
 </head>
 <body>
-    <div id="map"></div>
-    <div id="panel">
-        <h1>🛰️ ISS 실시간 추적</h1>
-        <div class="row">위도 <b id="lat">-</b></div>
-        <div class="row">경도 <b id="lon">-</b></div>
-        <div class="row">고도 <b id="alt">-</b></div>
-        <div class="row">속도 <b id="vel">-</b></div>
-        <div class="row">상태 <b id="vis">-</b></div>
-        <div id="status">불러오는 중...</div>
+    <div id="side">
+        <h1>🏝️ 제주 여행 추천 에이전트</h1>
+        <form id="form">
+            <input id="q" placeholder="예) 동쪽에서 오늘 갈 만한 곳 추천해줘" autofocus>
+            <button>추천</button>
+        </form>
+        <div id="steps" class="box steps" hidden></div>
+        <div id="weather" class="box" hidden></div>
+        <div id="reply" class="box" hidden></div>
     </div>
+    <div id="map"></div>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        const API = "https://api.wheretheiss.at/v1/satellites/25544";
-        const INTERVAL = 5000; // 5초마다 갱신
-        const map = L.map("map", { worldCopyJump: true }).setView([20, 0], 2);
+        const map = L.map("map").setView([33.38, 126.55], 10);
         L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            className: "dark-tiles", // 아래 CSS 필터로 어둡게 만든다
-            attribution: "&copy; OpenStreetMap contributors | ISS: wheretheiss.at"
+            attribution: "&copy; OpenStreetMap contributors | 날씨: Open-Meteo"
         }).addTo(map);
-
-        const marker = L.marker([0, 0], {
-            icon: L.divIcon({ className: "", html: '<div class="iss"></div>', iconSize: [18, 18] })
-        }).addTo(map);
-        const footprint = L.circle([0, 0], { color: "#7fd1ff", weight: 1, fillOpacity: .08 }).addTo(map);
-        const trailLayer = L.layerGroup().addTo(map);
-
-        let trail = []; // [[lat, lon], ...] 과거 → 현재
-
-        // 날짜변경선(경도 ±180)을 넘을 때 선이 지도를 가로지르지 않도록 구간을 나눈다
-        const drawTrail = () => {
-            trailLayer.clearLayers();
-            let seg = [];
-            trail.forEach((p, i) => {
-                if (i && Math.abs(p[1] - trail[i - 1][1]) > 180) {
-                    L.polyline(seg, { color: "#ffd34d", weight: 2, opacity: .8 }).addTo(trailLayer);
-                    seg = [];
-                }
-                seg.push(p);
-            });
-            L.polyline(seg, { color: "#ffd34d", weight: 2, opacity: .8 }).addTo(trailLayer);
-        };
-
+        const layer = L.layerGroup().addTo(map);
         const $ = (id) => document.getElementById(id);
-        const update = (d) => {
-            const pos = [d.latitude, d.longitude];
-            marker.setLatLng(pos);
-            footprint.setLatLng(pos).setRadius(d.footprint * 500); // footprint 는 지름(km)
-            trail.push(pos);
-            if (trail.length > 400) trail.shift();
-            drawTrail();
-            $("lat").textContent = d.latitude.toFixed(3) + "°";
-            $("lon").textContent = d.longitude.toFixed(3) + "°";
-            $("alt").textContent = d.altitude.toFixed(1) + " km";
-            $("vel").textContent = Math.round(d.velocity).toLocaleString() + " km/h";
-            $("vis").textContent = { daylight: "낮 ☀️", eclipsed: "밤 🌙", visible: "관측 가능" }[d.visibility] || d.visibility;
-            $("status").textContent = "마지막 갱신 " + new Date(d.timestamp * 1000).toLocaleTimeString("ko-KR");
-        };
+        const show = (id, text) => { $(id).hidden = !text; $(id).textContent = text || ""; };
 
-        const tick = async () => {
-            try {
-                update(await (await fetch(API)).json());
-            } catch (e) {
-                $("status").textContent = "불러오기 실패 — 다시 시도합니다";
+        $("form").onsubmit = async (e) => {
+            e.preventDefault();
+            layer.clearLayers(); // 이전 검색 결과는 새 검색 시작 즉시 지운다
+            show("steps", ""); show("weather", ""); show("reply", "에이전트가 날씨와 장소를 찾는 중...");
+            const res = await fetch("/api/chat", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ message: $("q").value })
+            });
+            const data = await res.json();
+            if (data.error) { show("reply", data.error); return; }
+
+            show("steps", data.steps.length ? "🔧 도구 호출\n" + data.steps.join("\n") : "");
+            show("weather", data.weather.map((w) =>
+                `🌤️ ${w.area}: ${w.weather}, ${w.temperature_c}°C, 12시간 내 강수확률 ${w.rain_probability_percent}%`).join("\n"));
+            show("reply", data.reply);
+
+            for (const s of data.spots) {
+                L.marker([s.lat, s.lon]).addTo(layer)
+                    .bindPopup(`<b>${s.name}</b><br>${s.areas.join(", ")} · ${s.indoor ? "실내" : "야외"}<br>${s.desc}`);
             }
+            if (data.spots.length) map.fitBounds(data.spots.map((s) => [s.lat, s.lon]), { padding: [40, 40] });
         };
-
-        // 시작할 때 지난 90분(약 1바퀴)의 궤적을 먼저 깔아 둔다
-        const loadPast = async () => {
-            const now = Math.floor(Date.now() / 1000);
-            const ts = Array.from({ length: 10 }, (_, i) => now - (10 - i) * 540).join(",");
-            try {
-                const past = await (await fetch(`${API}/positions?timestamps=${ts}`)).json();
-                trail = past.map((p) => [p.latitude, p.longitude]);
-            } catch (e) {}
-        };
-
-        (async () => {
-            await loadPast();
-            await tick();
-            if (trail.length) map.setView(trail[trail.length - 1], 3);
-            setInterval(tick, INTERVAL);
-        })();
     </script>
 </body>
 </html>
