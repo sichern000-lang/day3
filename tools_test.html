@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>find_spots 테스트</title>
+    <style>
+        body { font-family: sans-serif; margin: 16px; }
+        table { border-collapse: collapse; margin-top: 12px; }
+        th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
+    </style>
+</head>
+<body>
+    <h3>find_spots 테스트</h3>
+    <select id="area">
+        <option>동쪽</option><option>서쪽</option><option>서귀포</option><option>제주시</option>
+    </select>
+    <select id="indoor">
+        <option value="">실내 여부 상관없음</option>
+        <option value="true">실내</option>
+        <option value="false">야외</option>
+    </select>
+    <button id="run">찾기</button>
+    <div id="out"></div>
+    <script>
+        // api/tools.js 의 find_spots 와 같은 로직 (브라우저에서는 require/fs 를 못 써서 fetch 로 읽는다)
+        const MAX_SPOTS = 8;
+        const find_spots = async ({ area, indoor } = {}) => {
+            const { spots } = await (await fetch("jeju_spots.json")).json();
+            return spots
+                .filter((s) => s.area === area && (indoor === undefined || s.indoor === indoor))
+                .slice(0, MAX_SPOTS)
+                .map((s) => ({ name: s.name, areas: [s.area], indoor: s.indoor, desc: s.desc }));
+        };
+
+        document.getElementById("run").onclick = async () => {
+            const v = document.getElementById("indoor").value;
+            const rows = await find_spots({
+                area: document.getElementById("area").value,
+                indoor: v === "" ? undefined : v === "true"
+            });
+            document.getElementById("out").innerHTML = rows.length
+                ? "<table><tr><th>이름</th><th>지역</th><th>실내</th><th>설명</th></tr>" +
+                  rows.map((r) => `<tr><td>${r.name}</td><td>${r.areas.join(", ")}</td><td>${r.indoor ? "실내" : "야외"}</td><td>${r.desc}</td></tr>`).join("") +
+                  "</table>"
+                : "조건에 맞는 장소가 목록에 없습니다.";
+        };
+    </script>
+</body>
+</html>
