@@ -8,6 +8,7 @@
     <style>
         html, body { margin: 0; height: 100%; background: #070b16; color: #e8eefc; font-family: sans-serif; }
         #map { position: absolute; inset: 0; background: #070b16; }
+        .dark-tiles { filter: invert(1) hue-rotate(200deg) brightness(.8) contrast(.9) saturate(.6); }
         #panel {
             position: absolute; z-index: 1000; top: 16px; left: 16px; width: 240px; padding: 16px;
             background: rgba(10, 16, 36, .82); backdrop-filter: blur(8px);
@@ -45,8 +46,9 @@
         const API = "https://api.wheretheiss.at/v1/satellites/25544";
         const INTERVAL = 5000; // 5초마다 갱신
         const map = L.map("map", { worldCopyJump: true }).setView([20, 0], 2);
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-            attribution: "&copy; OpenStreetMap &copy; CARTO | ISS: wheretheiss.at"
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            className: "dark-tiles", // 아래 CSS 필터로 어둡게 만든다
+            attribution: "&copy; OpenStreetMap contributors | ISS: wheretheiss.at"
         }).addTo(map);
 
         const marker = L.marker([0, 0], {
