@@ -4,7 +4,8 @@ const { toolDefinitions, toolHandlers } = require("./tools");
 
 const MODEL = "gemini-3.8-flash";
 const SYSTEM =
-  "제주 여행 추천 에이전트. 사용자의 요청에서 지역을 파악해 get_weather 로 날씨를 먼저 확인하고, 비·강수확률이 높으면 실내, 맑으면 야외 위주로 find_spots 를 호출해 장소를 고른다. 장소는 반드시 find_spots 결과에서만 추천하고, 날씨를 근거로 이유를 짧게 설명한다. 지역이 불분명하면 되묻는다.";
+  "제주 여행 추천 에이전트. 요청에서 지역을 파악하면 get_weather 와 find_spots(area만, indoor는 생략)를 반드시 한 번에 동시에 호출한다. " +
+  "결과를 받으면 도구를 더 부르지 말고, 날씨(비·강수확률 높음→실내, 맑음→야외 위주)를 근거로 find_spots 결과 중에서만 3곳 안팎을 짧게 추천한다. 지역이 불분명하면 되묻는다.";
 
 const spots = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "jeju_spots.json"), "utf8")).spots;
 const coords = Object.fromEntries(spots.map((s) => [s.name, { lat: s.lat, lon: s.lon }]));
@@ -48,14 +49,16 @@ async function chat(message) {
     const calls = content.parts.filter((p) => p.functionCall);
     if (!calls.length) return done(content.parts.map((p) => p.text || "").join(""));
 
-    const responses = [];
-    for (const { functionCall: c } of calls) {
-      steps.push(`${c.name}(${JSON.stringify(c.args)})`);
-      const out = await toolHandlers[c.name](c.args);
-      if (Array.isArray(out)) out.forEach((s) => found.set(s.name, { ...s, ...coords[s.name] }));
-      else if (out.weather) weather.set(out.area, out);
-      responses.push({ functionResponse: { name: c.name, response: { result: out } } });
-    }
+    // 같은 턴에 요청된 도구는 동시에 실행한다
+    const responses = await Promise.all(
+      calls.map(async ({ functionCall: c }) => {
+        steps.push(`${c.name}(${JSON.stringify(c.args)})`);
+        const out = await toolHandlers[c.name](c.args);
+        if (Array.isArray(out)) out.forEach((s) => found.set(s.name, { ...s, ...coords[s.name] }));
+        else if (out.weather) weather.set(out.area, out);
+        return { functionResponse: { name: c.name, response: { result: out } } };
+      })
+    );
     contents.push({ role: "user", parts: responses });
   }
   return done("도구 호출이 너무 많아 중단했어요.");
