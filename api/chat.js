@@ -18,6 +18,7 @@ const functionDeclarations = toolDefinitions.map((t) => ({
 }));
 
 async function callGemini(contents) {
+  const t0 = Date.now();
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
     {
@@ -27,11 +28,15 @@ async function callGemini(contents) {
         systemInstruction: { parts: [{ text: SYSTEM }] },
         tools: [{ functionDeclarations }],
         contents,
+        generationConfig: { maxOutputTokens: 800 },
       }),
+      signal: AbortSignal.timeout(40000),
     }
   );
   if (!res.ok) throw new Error(`Gemini API ${res.status}: ${await res.text()}`);
-  return res.json();
+  const out = await res.json();
+  out.ms = Date.now() - t0;
+  return out;
 }
 
 // 사용자 문장 → Gemini 가 get_weather · find_spots 호출 → 결과 장소에 좌표를 붙여 지도용으로 반환
@@ -43,7 +48,9 @@ async function chat(message) {
   const done = (reply) => ({ reply, spots: [...found.values()], weather: [...weather.values()], steps });
 
   for (let turn = 0; turn < 5; turn++) {
-    const content = (await callGemini(contents)).candidates?.[0]?.content;
+    const g = await callGemini(contents);
+    steps.push(`⏱ Gemini ${g.ms}ms`);
+    const content = g.candidates?.[0]?.content;
     if (!content) return done("응답을 받지 못했어요. 다시 시도해 주세요.");
     contents.push(content);
     const calls = content.parts.filter((p) => p.functionCall);
