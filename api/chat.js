@@ -2,7 +2,8 @@ const fs = require("fs");
 const path = require("path");
 const { toolDefinitions, toolHandlers } = require("./tools");
 
-const MODEL = "gemini-3.8-flash";
+// 앞 모델이 과부하(503/429)이거나 없으면(404) 다음 모델로 넘어간다
+const MODELS = ["gemini-3.8-flash", "gemini-flash-latest"];
 const SYSTEM =
   "제주 여행 추천 에이전트. 요청에서 지역을 파악하면 get_weather 와 find_spots(area만, indoor는 생략)를 반드시 한 번에 동시에 호출한다. " +
   "결과를 받으면 도구를 더 부르지 말고, 날씨(비·강수확률 높음→실내, 맑음→야외 위주)를 근거로 find_spots 결과 중에서만 3곳 안팎을 짧게 추천한다. 지역이 불분명하면 되묻는다.";
@@ -18,25 +19,35 @@ const functionDeclarations = toolDefinitions.map((t) => ({
 }));
 
 async function callGemini(contents) {
-  const t0 = Date.now();
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM }] },
-        tools: [{ functionDeclarations }],
-        contents,
-        generationConfig: { maxOutputTokens: 800 },
-      }),
-      signal: AbortSignal.timeout(40000),
+  const body = JSON.stringify({
+    systemInstruction: { parts: [{ text: SYSTEM }] },
+    tools: [{ functionDeclarations }],
+    contents,
+    generationConfig: { maxOutputTokens: 800 },
+  });
+  let lastError;
+  for (const model of MODELS) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const t0 = Date.now();
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
+        body,
+        signal: AbortSignal.timeout(20000),
+      });
+      if (res.ok) {
+        const out = await res.json();
+        out.ms = Date.now() - t0;
+        out.model = model;
+        return out;
+      }
+      lastError = new Error(`Gemini API ${res.status} (${model}): ${await res.text()}`);
+      if (res.status === 404) break; // 이 모델은 쓸 수 없음 → 다음 모델
+      if (res.status !== 503 && res.status !== 429) throw lastError;
+      await new Promise((r) => setTimeout(r, 1000)); // 과부하: 잠깐 쉬고 재시도
     }
-  );
-  if (!res.ok) throw new Error(`Gemini API ${res.status}: ${await res.text()}`);
-  const out = await res.json();
-  out.ms = Date.now() - t0;
-  return out;
+  }
+  throw lastError;
 }
 
 // 사용자 문장 → Gemini 가 get_weather · find_spots 호출 → 결과 장소에 좌표를 붙여 지도용으로 반환
@@ -49,7 +60,7 @@ async function chat(message) {
 
   for (let turn = 0; turn < 5; turn++) {
     const g = await callGemini(contents);
-    steps.push(`⏱ Gemini ${g.ms}ms`);
+    steps.push(`⏱ ${g.model} ${g.ms}ms`);
     const content = g.candidates?.[0]?.content;
     if (!content) return done("응답을 받지 못했어요. 다시 시도해 주세요.");
     contents.push(content);
